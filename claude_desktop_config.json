@@ -1,0 +1,11 @@
+{
+    "mcpServers": {
+      "blockza-directory": {
+        "command": "node",
+        "args": ["/path/to/your/blockza-directory-mcp-server/build/index.js"],
+        "env": {
+          "NODE_ENV": "production"
+        }
+      }
+    }
+  }

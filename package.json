@@ -1,0 +1,36 @@
+{
+    "name": "blockza-directory-mcp-server",
+    "version": "1.0.0",
+    "description": "MCP server for Blockza directory API integration",
+    "main": "build/index.js",
+    "type": "module",
+    "scripts": {
+      "build": "tsc",
+      "start": "node build/index.js",
+      "dev": "tsx src/index.ts",
+      "watch": "tsx watch src/index.ts",
+      "clean": "rm -rf build",
+      "prepare": "npm run build"
+    },
+    "keywords": [
+      "mcp",
+      "model-context-protocol",
+      "blockza",
+      "directory",
+      "api"
+    ],
+    "author": "Sarman",
+    "license": "MIT",
+    "dependencies": {
+      "@modelcontextprotocol/sdk": "^1.0.0",
+      "zod": "^3.22.0"
+    },
+    "devDependencies": {
+      "@types/node": "^20.0.0",
+      "tsx": "^4.0.0",
+      "typescript": "^5.0.0"
+    },
+    "engines": {
+      "node": ">=18.0.0"
+    }
+  }
