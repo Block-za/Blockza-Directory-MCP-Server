@@ -64,8 +64,36 @@ interface ApiResponse {
   data: Company[];
 }
 
+// Events API Types
+interface EventSocialLinks {
+  linkedin: string;
+  telegram: string;
+  twitter: string;
+  instagram: string;
+}
+
+interface Event {
+  _id: string;
+  title: string;
+  company: string;
+  description: string;
+  location: string;
+  country: string;
+  city: string;
+  eventStartDate: string;
+  eventEndDate: string;
+  category: string;
+  website: string;
+  featuredImage: string;
+  socialLinks: EventSocialLinks;
+  createdAt: string;
+  updatedAt: string;
+  __v: number;
+}
+
 class BlockzaAPIClient {
   private baseUrl = "https://api.blockza.io/api/directory";
+  private eventsUrl = "https://api.blockza.io/api/events";
 
   async getCompanies(params?: {
     limit?: number;
@@ -114,6 +142,76 @@ class BlockzaAPIClient {
       return data.success ? data.data : [];
     } catch (error) {
       console.error('Failed to get companies by category:', error);
+      return [];
+    }
+  }
+
+  async getEvents(params?: {
+    limit?: number;
+    category?: string;
+    search?: string;
+    country?: string;
+    city?: string;
+    upcoming?: boolean;
+  }): Promise<Event[]> {
+    try {
+      const url = new URL(this.eventsUrl);
+      if (params?.limit) url.searchParams.set('limit', params.limit.toString());
+      if (params?.category) url.searchParams.set('category', params.category);
+      if (params?.search) url.searchParams.set('search', params.search);
+      if (params?.country) url.searchParams.set('country', params.country);
+      if (params?.city) url.searchParams.set('city', params.city);
+      if (params?.upcoming !== undefined) url.searchParams.set('upcoming', params.upcoming.toString());
+
+      const response = await fetch(url.toString());
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      return Array.isArray(data) ? data : [];
+    } catch (error) {
+      console.error('Events API request failed:', error);
+      throw error;
+    }
+  }
+
+  async getEventById(id: string): Promise<Event | null> {
+    try {
+      const events = await this.getEvents();
+      return events.find(event => event._id === id) || null;
+    } catch (error) {
+      console.error('Failed to get event by ID:', error);
+      return null;
+    }
+  }
+
+  async getEventsByCategory(category: string): Promise<Event[]> {
+    try {
+      return await this.getEvents({ category });
+    } catch (error) {
+      console.error('Failed to get events by category:', error);
+      return [];
+    }
+  }
+
+  async getUpcomingEvents(): Promise<Event[]> {
+    try {
+      const events = await this.getEvents();
+      const now = new Date();
+      return events.filter(event => new Date(event.eventStartDate) > now);
+    } catch (error) {
+      console.error('Failed to get upcoming events:', error);
+      return [];
+    }
+  }
+
+  async getEventsByLocation(country?: string, city?: string): Promise<Event[]> {
+    try {
+      return await this.getEvents({ country, city });
+    } catch (error) {
+      console.error('Failed to get events by location:', error);
       return [];
     }
   }
@@ -243,6 +341,157 @@ server.registerResource(
         contents: [{
           uri: uri.href,
           text: JSON.stringify({ error: `Failed to fetch categories: ${error}` }, null, 2),
+          mimeType: "application/json"
+        }]
+      };
+    }
+  }
+);
+
+// Events Resources
+server.registerResource(
+  "events",
+  "blockza://events",
+  {
+    title: "All Events",
+    description: "Complete directory of events in the Blockza ecosystem",
+    mimeType: "application/json"
+  },
+  async (uri) => {
+    try {
+      const events = await apiClient.getEvents();
+      return {
+        contents: [{
+          uri: uri.href,
+          text: JSON.stringify(events, null, 2),
+          mimeType: "application/json"
+        }]
+      };
+    } catch (error) {
+      return {
+        contents: [{
+          uri: uri.href,
+          text: JSON.stringify({ error: `Failed to fetch events: ${error}` }, null, 2),
+          mimeType: "application/json"
+        }]
+      };
+    }
+  }
+);
+
+server.registerResource(
+  "event-details",
+  new ResourceTemplate("blockza://event/{id}", { list: undefined }),
+  {
+    title: "Event Details",
+    description: "Detailed information for a specific event"
+  },
+  async (uri, { id }) => {
+    try {
+      if (typeof id !== 'string') {
+        return {
+          contents: [{
+            uri: uri.href,
+            text: JSON.stringify({ error: "Invalid event ID parameter" }, null, 2),
+            mimeType: "application/json"
+          }]
+        };
+      }
+      
+      const event = await apiClient.getEventById(id);
+      if (!event) {
+        return {
+          contents: [{
+            uri: uri.href,
+            text: JSON.stringify({ error: `Event not found: ${id}` }, null, 2),
+            mimeType: "application/json"
+          }]
+        };
+      }
+      return {
+        contents: [{
+          uri: uri.href,
+          text: JSON.stringify(event, null, 2),
+          mimeType: "application/json"
+        }]
+      };
+    } catch (error) {
+      return {
+        contents: [{
+          uri: uri.href,
+          text: JSON.stringify({ error: `Failed to fetch event: ${error}` }, null, 2),
+          mimeType: "application/json"
+        }]
+      };
+    }
+  }
+);
+
+server.registerResource(
+  "upcoming-events",
+  "blockza://events/upcoming",
+  {
+    title: "Upcoming Events",
+    
+    description: "All upcoming events in the Blockza ecosystem",
+    mimeType: "application/json"
+  },
+  async (uri) => {
+    try {
+      const events = await apiClient.getUpcomingEvents();
+      return {
+        contents: [{
+          uri: uri.href,
+          text: JSON.stringify(events, null, 2),
+          mimeType: "application/json"
+        }]
+      };
+    } catch (error) {
+      return {
+        contents: [{
+          uri: uri.href,
+          text: JSON.stringify({ error: `Failed to fetch upcoming events: ${error}` }, null, 2),
+          mimeType: "application/json"
+        }]
+      };
+    }
+  }
+);
+
+server.registerResource(
+  "event-categories",
+  "blockza://events/categories",
+  {
+    title: "Event Categories",
+    description: "Available categories for filtering events",
+    mimeType: "application/json"
+  },
+  async (uri) => {
+    try {
+      const events = await apiClient.getEvents();
+      const categories = new Set<string>();
+      
+      events.forEach(event => {
+        if (event.category) {
+          categories.add(event.category);
+        }
+      });
+
+      return {
+        contents: [{
+          uri: uri.href,
+          text: JSON.stringify({
+            success: true,
+            categories: Array.from(categories).sort()
+          }, null, 2),
+          mimeType: "application/json"
+        }]
+      };
+    } catch (error) {
+      return {
+        contents: [{
+          uri: uri.href,
+          text: JSON.stringify({ error: `Failed to fetch event categories: ${error}` }, null, 2),
           mimeType: "application/json"
         }]
       };
@@ -565,6 +814,344 @@ server.registerTool(
   }
 );
 
+// Events Tools
+server.registerTool(
+  "search_events",
+  {
+    title: "Search Events",
+    description: "Search events in the Blockza events directory by title, category, location, or other criteria",
+    inputSchema: {
+      search: z.string().optional().describe("Search term to find events by title, description, or company"),
+      category: z.string().optional().describe("Filter by event category (e.g., 'Conference', 'Meetup')"),
+      country: z.string().optional().describe("Filter by country"),
+      city: z.string().optional().describe("Filter by city"),
+      limit: z.number().optional().describe("Maximum number of results to return"),
+      upcoming_only: z.boolean().optional().describe("Show only upcoming events")
+    }
+  },
+  async ({ search, category, country, city, limit, upcoming_only }) => {
+    try {
+      const params: {
+        search?: string;
+        category?: string;
+        country?: string;
+        city?: string;
+        limit?: number;
+        upcoming?: boolean;
+      } = {};
+      
+      if (search !== undefined) params.search = search;
+      if (category !== undefined) params.category = category;
+      if (country !== undefined) params.country = country;
+      if (city !== undefined) params.city = city;
+      if (limit !== undefined) params.limit = limit;
+      if (upcoming_only !== undefined) params.upcoming = upcoming_only;
+
+      const events = await apiClient.getEvents(params);
+      
+      let filteredEvents = events;
+      if (upcoming_only) {
+        const now = new Date();
+        filteredEvents = events.filter(event => new Date(event.eventStartDate) > now);
+      }
+
+      const results = filteredEvents.map(event => ({
+        id: event._id,
+        title: event.title,
+        company: event.company,
+        category: event.category,
+        location: `${event.city}, ${event.country}`,
+        eventStartDate: event.eventStartDate,
+        eventEndDate: event.eventEndDate,
+        website: event.website,
+        featuredImage: event.featuredImage
+      }));
+
+      return {
+        content: [{
+          type: "text",
+          text: `Found ${results.length} events:\n\n${JSON.stringify(results, null, 2)}`
+        }]
+      };
+    } catch (error) {
+      return {
+        content: [{
+          type: "text",
+          text: `Error searching events: ${error}`
+        }],
+        isError: true
+      };
+    }
+  }
+);
+
+server.registerTool(
+  "get_event_details",
+  {
+    title: "Get Event Details",
+    description: "Get detailed information about a specific event by ID",
+    inputSchema: {
+      event_id: z.string().describe("Event ID to look up")
+    }
+  },
+  async ({ event_id }) => {
+    try {
+      const event = await apiClient.getEventById(event_id);
+      
+      if (!event) {
+        return {
+          content: [{
+            type: "text",
+            text: `Event not found: ${event_id}`
+          }],
+          isError: true
+        };
+      }
+
+      const details = {
+        basic_info: {
+          id: event._id,
+          title: event.title,
+          company: event.company,
+          category: event.category,
+          description: event.description
+        },
+        location: {
+          venue: event.location,
+          city: event.city,
+          country: event.country
+        },
+        dates: {
+          start: event.eventStartDate,
+          end: event.eventEndDate
+        },
+        links: {
+          website: event.website,
+          featuredImage: event.featuredImage
+        },
+        social_links: event.socialLinks,
+        metadata: {
+          createdAt: event.createdAt,
+          updatedAt: event.updatedAt
+        }
+      };
+
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify(details, null, 2)
+        }]
+      };
+    } catch (error) {
+      return {
+        content: [{
+          type: "text",
+          text: `Error getting event details: ${error}`
+        }],
+        isError: true
+      };
+    }
+  }
+);
+
+server.registerTool(
+  "get_events_by_category",
+  {
+    title: "Get Events by Category",
+    description: "Retrieve all events in a specific category",
+    inputSchema: {
+      category: z.string().describe("Category to filter by (e.g., 'Conference', 'Meetup')"),
+      limit: z.number().optional().describe("Maximum number of results to return")
+    }
+  },
+  async ({ category, limit }) => {
+    try {
+      const events = await apiClient.getEventsByCategory(category);
+      const results = limit ? events.slice(0, limit) : events;
+
+      const summary = results.map(event => ({
+        id: event._id,
+        title: event.title,
+        company: event.company,
+        location: `${event.city}, ${event.country}`,
+        eventStartDate: event.eventStartDate,
+        eventEndDate: event.eventEndDate,
+        website: event.website
+      }));
+
+      return {
+        content: [{
+          type: "text",
+          text: `Found ${results.length} events in category "${category}":\n\n${JSON.stringify(summary, null, 2)}`
+        }]
+      };
+    } catch (error) {
+      return {
+        content: [{
+          type: "text",
+          text: `Error getting events by category: ${error}`
+        }],
+        isError: true
+      };
+    }
+  }
+);
+
+server.registerTool(
+  "get_upcoming_events",
+  {
+    title: "Get Upcoming Events",
+    description: "Get all upcoming events sorted by date",
+    inputSchema: {
+      limit: z.number().optional().describe("Maximum number of results to return")
+    }
+  },
+  async ({ limit }) => {
+    try {
+      const events = await apiClient.getUpcomingEvents();
+      const results = limit ? events.slice(0, limit) : events;
+
+      const summary = results.map(event => ({
+        id: event._id,
+        title: event.title,
+        company: event.company,
+        category: event.category,
+        location: `${event.city}, ${event.country}`,
+        eventStartDate: event.eventStartDate,
+        eventEndDate: event.eventEndDate,
+        website: event.website
+      }));
+
+      return {
+        content: [{
+          type: "text",
+          text: `Found ${results.length} upcoming events:\n\n${JSON.stringify(summary, null, 2)}`
+        }]
+      };
+    } catch (error) {
+      return {
+        content: [{
+          type: "text",
+          text: `Error getting upcoming events: ${error}`
+        }],
+        isError: true
+      };
+    }
+  }
+);
+
+server.registerTool(
+  "get_events_by_location",
+  {
+    title: "Get Events by Location",
+    description: "Retrieve events in a specific country or city",
+    inputSchema: {
+      country: z.string().optional().describe("Country to filter by"),
+      city: z.string().optional().describe("City to filter by"),
+      limit: z.number().optional().describe("Maximum number of results to return")
+    }
+  },
+  async ({ country, city, limit }) => {
+    try {
+      if (!country && !city) {
+        return {
+          content: [{
+            type: "text",
+            text: "Please provide either a country or city parameter"
+          }],
+          isError: true
+        };
+      }
+
+      const events = await apiClient.getEventsByLocation(country, city);
+      const results = limit ? events.slice(0, limit) : events;
+
+      const summary = results.map(event => ({
+        id: event._id,
+        title: event.title,
+        company: event.company,
+        category: event.category,
+        location: `${event.city}, ${event.country}`,
+        eventStartDate: event.eventStartDate,
+        eventEndDate: event.eventEndDate,
+        website: event.website
+      }));
+
+      const location = city ? `${city}, ${country}` : country;
+      return {
+        content: [{
+          type: "text",
+          text: `Found ${results.length} events in ${location}:\n\n${JSON.stringify(summary, null, 2)}`
+        }]
+      };
+    } catch (error) {
+      return {
+        content: [{
+          type: "text",
+          text: `Error getting events by location: ${error}`
+        }],
+        isError: true
+      };
+    }
+  }
+);
+
+server.registerTool(
+  "get_events_stats",
+  {
+    title: "Get Events Statistics",
+    description: "Get overall statistics about the Blockza events directory",
+    inputSchema: {}
+  },
+  async () => {
+    try {
+      const events = await apiClient.getEvents();
+      const upcomingEvents = await apiClient.getUpcomingEvents();
+      
+      const categories = new Set<string>();
+      const countries = new Set<string>();
+      const cities = new Set<string>();
+      const companies = new Set<string>();
+
+      events.forEach(event => {
+        if (event.category) categories.add(event.category);
+        if (event.country) countries.add(event.country);
+        if (event.city) cities.add(event.city);
+        if (event.company) companies.add(event.company);
+      });
+
+      const stats = {
+        total_events: events.length,
+        upcoming_events: upcomingEvents.length,
+        past_events: events.length - upcomingEvents.length,
+        total_categories: categories.size,
+        categories: Array.from(categories).sort(),
+        total_countries: countries.size,
+        countries: Array.from(countries).sort(),
+        total_cities: cities.size,
+        cities: Array.from(cities).sort(),
+        total_companies: companies.size,
+        companies: Array.from(companies).sort()
+      };
+
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify(stats, null, 2)
+        }]
+      };
+    } catch (error) {
+      return {
+        content: [{
+          type: "text",
+          text: `Error getting events statistics: ${error}`
+        }],
+        isError: true
+      };
+    }
+  }
+);
+
 // Register Prompts
 server.registerPrompt(
   "analyze_company",
@@ -729,6 +1316,309 @@ Rank them by overall potential and explain your reasoning.`
     };
   }
 );
+
+// Events Prompts
+server.registerPrompt(
+  "analyze_event",
+  {
+    title: "Analyze Event",
+    description: "Generate a comprehensive analysis of an event in the directory",
+    argsSchema: {
+      event_id: z.string().describe("The ID of the event to analyze")
+    }
+  },
+  async ({ event_id }) => {
+    if (!event_id) {
+      return {
+        messages: [{
+          role: "user",
+          content: {
+            type: "text",
+            text: "Please provide an event ID to analyze."
+          }
+        }]
+      };
+    }
+    
+    const event = await apiClient.getEventById(event_id);
+    
+    if (!event) {
+      return {
+        messages: [{
+          role: "user",
+          content: {
+            type: "text",
+            text: `Please provide an analysis template for when an event "${event_id}" is not found in the directory.`
+          }
+        }]
+      };
+    }
+
+    const startDate = new Date(event.eventStartDate);
+    const endDate = new Date(event.eventEndDate);
+    const now = new Date();
+    const isUpcoming = startDate > now;
+    const isOngoing = startDate <= now && endDate >= now;
+
+    return {
+      messages: [{
+        role: "user",
+        content: {
+          type: "text",
+          text: `Please analyze the following event from the Blockza events directory:
+
+Event: ${event.title}
+Organizer: ${event.company}
+Category: ${event.category}
+Status: ${isUpcoming ? 'Upcoming' : isOngoing ? 'Ongoing' : 'Past'}
+
+Description:
+${event.description}
+
+Location: ${event.location}, ${event.city}, ${event.country}
+Dates: ${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()}
+
+Links:
+- Website: ${event.website}
+- Featured Image: ${event.featuredImage}
+
+Social Media:
+- Twitter: ${event.socialLinks.twitter}
+- LinkedIn: ${event.socialLinks.linkedin}
+- Telegram: ${event.socialLinks.telegram}
+- Instagram: ${event.socialLinks.instagram}
+
+Please provide a comprehensive analysis covering:
+1. Event overview and significance in the Web3 ecosystem
+2. Organizer reputation and track record
+3. Target audience and value proposition
+4. Location and timing analysis
+5. Social media presence and marketing strategy
+6. Potential impact and networking opportunities
+7. Recommendations for attendees or organizers
+8. Market positioning and competitive landscape`
+        }
+      }]
+    };
+  }
+);
+
+server.registerPrompt(
+  "compare_events",
+  {
+    title: "Compare Events",
+    description: "Generate a comparison between events in the same category or location",
+    argsSchema: {
+      category: z.string().optional().describe("Category to compare events within"),
+      location: z.string().optional().describe("Location to compare events within (country or city)"),
+      limit: z.string().optional().describe("Number of events to include in comparison (default: 5)")
+    }
+  },
+  async ({ category, location, limit = "5" }) => {
+    if (!category && !location) {
+      return {
+        messages: [{
+          role: "user",
+          content: {
+            type: "text",
+            text: "Please provide either a category or location to compare events within."
+          }
+        }]
+      };
+    }
+
+    let events: Event[] = [];
+    if (category) {
+      events = await apiClient.getEventsByCategory(category);
+    } else if (location) {
+      // Try to determine if it's a country or city
+      const allEvents = await apiClient.getEvents();
+      events = allEvents.filter(event => 
+        event.country.toLowerCase().includes(location.toLowerCase()) ||
+        event.city.toLowerCase().includes(location.toLowerCase())
+      );
+    }
+
+    const numLimit = limit ? parseInt(limit, 10) : 5;
+    const topEvents = events
+      .sort((a, b) => new Date(a.eventStartDate).getTime() - new Date(b.eventStartDate).getTime())
+      .slice(0, numLimit);
+
+    if (topEvents.length === 0) {
+      const filterType = category || location;
+      return {
+        messages: [{
+          role: "user",
+          content: {
+            type: "text",
+            text: `No events found for "${filterType}". Please suggest how to find events in this category/location or recommend similar options.`
+          }
+        }]
+      };
+    }
+
+    const eventData = topEvents.map(event => ({
+      id: event._id,
+      title: event.title,
+      organizer: event.company,
+      category: event.category,
+      location: `${event.city}, ${event.country}`,
+      venue: event.location,
+      dates: {
+        start: event.eventStartDate,
+        end: event.eventEndDate
+      },
+      website: event.website,
+      socialLinks: event.socialLinks
+    }));
+
+    const filterType = category || location;
+    return {
+      messages: [{
+        role: "user",
+        content: {
+          type: "text",
+          text: `Please compare the following ${topEvents.length} events for "${filterType}":
+
+${JSON.stringify(eventData, null, 2)}
+
+Please provide a detailed comparison covering:
+1. Event positioning and unique value propositions
+2. Organizer reputation and expertise
+3. Target audience and attendee benefits
+4. Location advantages and accessibility
+5. Timing and market conditions
+6. Networking and business opportunities
+7. Competitive advantages and potential challenges
+8. Recommendations for attendees and organizers
+
+Rank them by overall value and explain your reasoning.`
+        }
+      }]
+    };
+  }
+);
+
+server.registerPrompt(
+  "event_recommendations",
+  {
+    title: "Event Recommendations",
+    description: "Generate personalized event recommendations based on criteria",
+    argsSchema: {
+      interests: z.string().optional().describe("Areas of interest (e.g., 'DeFi', 'NFTs', 'AI')"),
+      location: z.string().optional().describe("Preferred location (country or city)"),
+      timeframe: z.string().optional().describe("Preferred timeframe (e.g., 'next 3 months', '2025')"),
+      event_type: z.string().optional().describe("Type of event (e.g., 'Conference', 'Meetup', 'Hackathon')")
+    }
+  },
+  async ({ interests, location, timeframe, event_type }) => {
+    try {
+      let events = await apiClient.getEvents();
+      
+      // Apply filters
+      if (interests) {
+        const interestTerms = interests.toLowerCase().split(',').map(term => term.trim());
+        events = events.filter(event => 
+          interestTerms.some(term => 
+            event.title.toLowerCase().includes(term) ||
+            event.description.toLowerCase().includes(term) ||
+            event.category.toLowerCase().includes(term)
+          )
+        );
+      }
+
+      if (location) {
+        events = events.filter(event => 
+          event.country.toLowerCase().includes(location.toLowerCase()) ||
+          event.city.toLowerCase().includes(location.toLowerCase())
+        );
+      }
+
+      if (event_type) {
+        events = events.filter(event => 
+          event.category.toLowerCase().includes(event_type.toLowerCase())
+        );
+      }
+
+      // Filter by timeframe
+      if (timeframe) {
+        const now = new Date();
+        const threeMonthsFromNow = new Date(now.getTime() + (90 * 24 * 60 * 60 * 1000));
+        const endOf2025 = new Date('2025-12-31');
+        
+        if (timeframe.toLowerCase().includes('next 3 months')) {
+          events = events.filter(event => {
+            const eventDate = new Date(event.eventStartDate);
+            return eventDate >= now && eventDate <= threeMonthsFromNow;
+          });
+        } else if (timeframe.toLowerCase().includes('2025')) {
+          events = events.filter(event => {
+            const eventDate = new Date(event.eventStartDate);
+            return eventDate <= endOf2025;
+          });
+        }
+      }
+
+      // Sort by date and take top 10
+      const recommendations = events
+        .sort((a, b) => new Date(a.eventStartDate).getTime() - new Date(b.eventStartDate).getTime())
+        .slice(0, 10);
+
+      const recommendationData = recommendations.map(event => ({
+        id: event._id,
+        title: event.title,
+        organizer: event.company,
+        category: event.category,
+        location: `${event.city}, ${event.country}`,
+        dates: event.eventStartDate,
+        website: event.website,
+        description: event.description.substring(0, 200) + '...'
+      }));
+
+      const criteria = [];
+      if (interests) criteria.push(`Interests: ${interests}`);
+      if (location) criteria.push(`Location: ${location}`);
+      if (timeframe) criteria.push(`Timeframe: ${timeframe}`);
+      if (event_type) criteria.push(`Event Type: ${event_type}`);
+
+      return {
+        messages: [{
+          role: "user",
+          content: {
+            type: "text",
+            text: `Based on your criteria: ${criteria.join(', ')}
+
+I found ${recommendations.length} events that match your preferences:
+
+${JSON.stringify(recommendationData, null, 2)}
+
+Please provide personalized recommendations covering:
+1. Why each event matches the user's criteria
+2. Expected value and learning opportunities
+3. Networking potential and target audience
+4. Logistics and practical considerations
+5. Alternative options if the top recommendations don't work
+6. Tips for maximizing the event experience
+7. Follow-up actions and preparation suggestions
+
+Rank the recommendations by relevance and explain your reasoning.`
+        }
+      }]
+    };
+    } catch (error) {
+      return {
+        messages: [{
+          role: "user",
+          content: {
+            type: "text",
+            text: `Error generating event recommendations: ${error}. Please provide guidance on how to help users find relevant events.`
+          }
+        }]
+      };
+    }
+  }
+);
+
 
 // Start the server
 async function main() {
