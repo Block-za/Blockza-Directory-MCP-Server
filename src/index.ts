@@ -541,10 +541,12 @@ server.registerTool(
 
       const companies = data.data || [];
       const results = companies.map(company => ({
+        _id: company._id,
         name: company.name,
         slug: company.slug,
         category: company.category,
         shortDescription: company.shortDescription,
+        logo: company.logo,
         founderName: company.founderName,
         verificationStatus: company.verificationStatus,
         url: company.url,
@@ -555,7 +557,7 @@ server.registerTool(
       return {
         content: [{
           type: "text",
-          text: `Found ${results.length} companies:\n\n${JSON.stringify(results, null, 2)}`
+          text: `COMPANIES_DATA_START\n${JSON.stringify(results, null, 2)}\nCOMPANIES_DATA_END\n\nFound ${results.length} companies matching your search criteria.`
         }]
       };
     } catch (error) {
@@ -656,9 +658,12 @@ server.registerTool(
       const results = limit ? companies.slice(0, limit) : companies;
 
       const summary = results.map(company => ({
+        _id: company._id,
         name: company.name,
         slug: company.slug,
+        category: company.category,
         shortDescription: company.shortDescription,
+        logo: company.logo,
         founderName: company.founderName,
         verificationStatus: company.verificationStatus,
         url: company.url,
@@ -669,7 +674,7 @@ server.registerTool(
       return {
         content: [{
           type: "text",
-          text: `Found ${results.length} companies in category "${category}":\n\n${JSON.stringify(summary, null, 2)}`
+          text: `COMPANIES_DATA_START\n${JSON.stringify(summary, null, 2)}\nCOMPANIES_DATA_END\n\nFound ${results.length} companies in category "${category}".`
         }]
       };
     } catch (error) {
