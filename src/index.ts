@@ -547,6 +547,7 @@ server.registerTool(
         category: company.category,
         shortDescription: company.shortDescription,
         logo: company.logo,
+        banner: company.banner,
         founderName: company.founderName,
         verificationStatus: company.verificationStatus,
         url: company.url,
@@ -603,6 +604,8 @@ server.registerTool(
           category: company.category,
           shortDescription: company.shortDescription,
           detail: company.detail,
+          logo: company.logo,
+          banner: company.banner,
           url: company.url,
           verificationStatus: company.verificationStatus
         },
@@ -664,6 +667,7 @@ server.registerTool(
         category: company.category,
         shortDescription: company.shortDescription,
         logo: company.logo,
+        banner: company.banner,
         founderName: company.founderName,
         verificationStatus: company.verificationStatus,
         url: company.url,
@@ -740,7 +744,7 @@ server.registerTool(
       return {
         content: [{
           type: "text",
-          text: JSON.stringify(teamInfo, null, 2)
+          text: `TEAM_DATA_START\n${JSON.stringify(teamInfo, null, 2)}\nTEAM_DATA_END\n\nFound ${teamInfo.team_members.length} team members for ${teamInfo.company}.`
         }]
       };
     } catch (error) {
@@ -875,7 +879,7 @@ server.registerTool(
       return {
         content: [{
           type: "text",
-          text: `Found ${results.length} events:\n\n${JSON.stringify(results, null, 2)}`
+          text: `EVENTS_DATA_START\n${JSON.stringify(results, null, 2)}\nEVENTS_DATA_END\n\nFound ${results.length} events matching your search criteria.`
         }]
       };
     } catch (error) {
@@ -987,7 +991,7 @@ server.registerTool(
       return {
         content: [{
           type: "text",
-          text: `Found ${results.length} events in category "${category}":\n\n${JSON.stringify(summary, null, 2)}`
+          text: `EVENTS_DATA_START\n${JSON.stringify(summary, null, 2)}\nEVENTS_DATA_END\n\nFound ${results.length} events in category "${category}".`
         }]
       };
     } catch (error) {
@@ -1030,7 +1034,7 @@ server.registerTool(
       return {
         content: [{
           type: "text",
-          text: `Found ${results.length} upcoming events:\n\n${JSON.stringify(summary, null, 2)}`
+          text: `EVENTS_DATA_START\n${JSON.stringify(summary, null, 2)}\nEVENTS_DATA_END\n\nFound ${results.length} upcoming events.`
         }]
       };
     } catch (error) {
@@ -1086,7 +1090,7 @@ server.registerTool(
       return {
         content: [{
           type: "text",
-          text: `Found ${results.length} events in ${location}:\n\n${JSON.stringify(summary, null, 2)}`
+          text: `EVENTS_DATA_START\n${JSON.stringify(summary, null, 2)}\nEVENTS_DATA_END\n\nFound ${results.length} events in ${location}.`
         }]
       };
     } catch (error) {
