@@ -503,11 +503,11 @@ server.registerResource(
 server.registerTool(
   "search_companies",
   {
-    title: "Search Companies",
-    description: "Search companies in the Blockza directory by name, category, or other criteria",
+    title: "Search Companies by Name",
+    description: "Search companies in the Blockza directory by name or general search terms. For category-specific searches, use get_companies_by_category instead.",
     inputSchema: {
       search: z.string().optional().describe("Search term to find companies by name or description"),
-      category: z.string().optional().describe("Filter by company category (e.g., 'Crypto Exchanges', 'AI')"),
+      category: z.string().optional().describe("Filter by company category (e.g., 'Crypto Exchanges', 'AI') - NOTE: For dedicated category searches, use get_companies_by_category tool"),
       limit: z.number().optional().describe("Maximum number of results to return"),
       verified_only: z.boolean().optional().describe("Show only verified companies")
     }
@@ -649,9 +649,9 @@ server.registerTool(
   "get_companies_by_category",
   {
     title: "Get Companies by Category",
-    description: "Retrieve all companies in a specific category",
+    description: "PRIMARY TOOL for retrieving all companies in a specific category. Use this tool when users ask for companies by category (Web3, NFT, Blockchain, AI, etc.). This provides the most comprehensive and accurate category-based results.",
     inputSchema: {
-      category: z.string().describe("Category to filter by (e.g., 'Crypto Exchanges', 'AI')"),
+      category: z.string().describe("Category to filter by (e.g., 'Web3', 'NFT', 'Blockchain', 'Crypto Exchanges', 'AI', 'DeFi', 'Metaverse')"),
       limit: z.number().optional().describe("Maximum number of results to return")
     }
   },
