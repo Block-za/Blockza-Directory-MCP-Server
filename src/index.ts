@@ -3,8 +3,8 @@ import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mc
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { z } from "zod";
-import http from "http";
-import url from "url";
+import * as http from "http";
+import * as url from "url";
 
 // Types based on your API response
 interface SocialLinks {
@@ -1639,7 +1639,7 @@ async function main() {
   
   if (isProduction || process.env.USE_HTTP === 'true') {
     // HTTP/SSE mode for production deployment
-    const httpServer = http.createServer(async (req, res) => {
+    const httpServer = http.createServer(async (req: http.IncomingMessage, res: http.ServerResponse) => {
       const parsedUrl = url.parse(req.url || '', true);
       
       // Handle CORS
