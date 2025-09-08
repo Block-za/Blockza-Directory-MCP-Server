@@ -1,7 +1,10 @@
 // src/index.ts
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { z } from "zod";
+import http from "http";
+import url from "url";
 
 // Types based on your API response
 interface SocialLinks {
@@ -1631,9 +1634,59 @@ Rank the recommendations by relevance and explain your reasoning.`
 
 // Start the server
 async function main() {
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-  console.error("Blockza Directory MCP Server running on stdio");
+  const PORT = process.env.PORT || 3001;
+  const isProduction = process.env.NODE_ENV === 'production';
+  
+  if (isProduction || process.env.USE_HTTP === 'true') {
+    // HTTP/SSE mode for production deployment
+    const httpServer = http.createServer(async (req, res) => {
+      const parsedUrl = url.parse(req.url || '', true);
+      
+      // Handle CORS
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+      
+      if (req.method === 'OPTIONS') {
+        res.writeHead(200);
+        res.end();
+        return;
+      }
+      
+      // Health check endpoint
+      if (parsedUrl.pathname === '/health') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ 
+          status: 'healthy', 
+          server: 'blockza-directory-mcp-server',
+          tools: 12 // We have 12 tools defined
+        }));
+        return;
+      }
+      
+      // MCP SSE endpoint
+      if (parsedUrl.pathname === '/mcp') {
+        const transport = new SSEServerTransport("/mcp", res);
+        await server.connect(transport);
+        return;
+      }
+      
+      // Default response
+      res.writeHead(404, { 'Content-Type': 'text/plain' });
+      res.end('MCP Server - Use /mcp for SSE connection or /health for status');
+    });
+    
+    httpServer.listen(PORT, () => {
+      console.log(`Blockza Directory MCP Server running on HTTP port ${PORT}`);
+      console.log(`Health check: http://localhost:${PORT}/health`);
+      console.log(`MCP endpoint: http://localhost:${PORT}/mcp`);
+    });
+  } else {
+    // Stdio mode for local development and Claude Desktop
+    const transport = new StdioServerTransport();
+    await server.connect(transport);
+    console.error("Blockza Directory MCP Server running on stdio");
+  }
 }
 
 // Handle process cleanup
