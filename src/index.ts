@@ -2,9 +2,12 @@
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import * as http from "http";
 import * as url from "url";
+import { randomUUID } from "node:crypto";
 
 // Types based on your API response
 interface SocialLinks {
@@ -1632,20 +1635,24 @@ Rank the recommendations by relevance and explain your reasoning.`
 );
 
 
+// Store transports by session ID
+const transports: { [sessionId: string]: StreamableHTTPServerTransport | SSEServerTransport } = {};
+
 // Start the server
 async function main() {
   const PORT = process.env.PORT || 3001;
   const isProduction = process.env.NODE_ENV === 'production';
   
   if (isProduction || process.env.USE_HTTP === 'true') {
-    // HTTP/SSE mode for production deployment
+    // HTTP mode for production deployment with both StreamableHTTP and SSE support
     const httpServer = http.createServer(async (req: http.IncomingMessage, res: http.ServerResponse) => {
       const parsedUrl = url.parse(req.url || '', true);
       
       // Handle CORS
       res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Mcp-Session-Id');
+      res.setHeader('Access-Control-Expose-Headers', 'Mcp-Session-Id');
       
       if (req.method === 'OPTIONS') {
         res.writeHead(200);
@@ -1664,22 +1671,108 @@ async function main() {
         return;
       }
       
-      // MCP SSE endpoint
+      // MCP StreamableHTTP endpoint (modern bidirectional transport)
       if (parsedUrl.pathname === '/mcp') {
-        const transport = new SSEServerTransport("/mcp", res);
-        await server.connect(transport);
+        try {
+          let body = '';
+          
+          // Collect request body for POST requests
+          if (req.method === 'POST') {
+            req.on('data', chunk => {
+              body += chunk.toString();
+            });
+            
+            await new Promise<void>((resolve) => {
+              req.on('end', resolve);
+            });
+          }
+          
+          const parsedBody = body ? JSON.parse(body) : undefined;
+          const sessionId = req.headers['mcp-session-id'] as string;
+          let transport: StreamableHTTPServerTransport;
+          
+          if (sessionId && transports[sessionId]) {
+            // Check if the transport is of the correct type
+            const existingTransport = transports[sessionId];
+            if (existingTransport instanceof StreamableHTTPServerTransport) {
+              transport = existingTransport;
+            } else {
+              res.writeHead(400, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({
+                jsonrpc: '2.0',
+                error: {
+                  code: -32000,
+                  message: 'Bad Request: Session exists but uses a different transport protocol',
+                },
+                id: null,
+              }));
+              return;
+            }
+          } else if (!sessionId && req.method === 'POST' && parsedBody && isInitializeRequest(parsedBody)) {
+            // Create new StreamableHTTP transport for initialization
+            transport = new StreamableHTTPServerTransport({
+              sessionIdGenerator: () => randomUUID(),
+              onsessioninitialized: (sessionId) => {
+                console.log(`StreamableHTTP session initialized with ID: ${sessionId}`);
+                transports[sessionId] = transport;
+              }
+            });
+            
+            // Set up onclose handler to clean up transport when closed
+            transport.onclose = () => {
+              const sid = transport.sessionId;
+              if (sid && transports[sid]) {
+                console.log(`Transport closed for session ${sid}, removing from transports map`);
+                delete transports[sid];
+              }
+            };
+            
+            // Connect the transport to the MCP server
+            await server.connect(transport);
+          } else {
+            // Invalid request
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+              jsonrpc: '2.0',
+              error: {
+                code: -32000,
+                message: 'Bad Request: No valid session ID provided or not an initialization request',
+              },
+              id: null,
+            }));
+            return;
+          }
+          
+          // Handle the request with the transport
+          await transport.handleRequest(req, res, parsedBody);
+          
+        } catch (error) {
+          console.error('Error handling MCP request:', error);
+          if (!res.headersSent) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+              jsonrpc: '2.0',
+              error: {
+                code: -32603,
+                message: 'Internal server error',
+              },
+              id: null,
+            }));
+          }
+        }
         return;
       }
       
       // Default response
       res.writeHead(404, { 'Content-Type': 'text/plain' });
-      res.end('MCP Server - Use /mcp for SSE connection or /health for status');
+      res.end('MCP Server - Use /mcp for StreamableHTTP connection or /health for status');
     });
     
     httpServer.listen(PORT, () => {
       console.log(`Blockza Directory MCP Server running on HTTP port ${PORT}`);
       console.log(`Health check: http://localhost:${PORT}/health`);
       console.log(`MCP endpoint: http://localhost:${PORT}/mcp`);
+      console.log(`Transport: StreamableHTTP (bidirectional)`);
     });
   } else {
     // Stdio mode for local development and Claude Desktop
