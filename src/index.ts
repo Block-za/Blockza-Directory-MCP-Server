@@ -1648,6 +1648,10 @@ async function main() {
     const httpServer = http.createServer(async (req: http.IncomingMessage, res: http.ServerResponse) => {
       const parsedUrl = url.parse(req.url || '', true);
       
+      // Optimize connection settings
+      res.setHeader('Connection', 'keep-alive');
+      res.setHeader('Keep-Alive', 'timeout=30');
+      
       // Handle CORS with comprehensive headers
       res.setHeader('Access-Control-Allow-Origin', '*');
       res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
@@ -1774,6 +1778,9 @@ async function main() {
       res.writeHead(404, { 'Content-Type': 'text/plain' });
       res.end('MCP Server - Use /mcp for StreamableHTTP connection or /health for status');
     });
+    
+    httpServer.keepAliveTimeout = 30000;
+    httpServer.headersTimeout = 35000;
     
     httpServer.listen(PORT, () => {
       console.log(`Blockza Directory MCP Server running on HTTP port ${PORT}`);
