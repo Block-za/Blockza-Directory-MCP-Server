@@ -1648,11 +1648,12 @@ async function main() {
     const httpServer = http.createServer(async (req: http.IncomingMessage, res: http.ServerResponse) => {
       const parsedUrl = url.parse(req.url || '', true);
       
-      // Handle CORS
+      // Handle CORS with comprehensive headers
       res.setHeader('Access-Control-Allow-Origin', '*');
       res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
-      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Mcp-Session-Id');
-      res.setHeader('Access-Control-Expose-Headers', 'Mcp-Session-Id');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept, Authorization, x-api-key, Mcp-Session-Id, Last-Event-ID');
+      res.setHeader('Access-Control-Expose-Headers', 'Content-Type, Authorization, x-api-key, Mcp-Session-Id');
+      res.setHeader('Access-Control-Max-Age', '86400');
       
       if (req.method === 'OPTIONS') {
         res.writeHead(200);
@@ -1715,6 +1716,12 @@ async function main() {
               onsessioninitialized: (sessionId) => {
                 console.log(`StreamableHTTP session initialized with ID: ${sessionId}`);
                 transports[sessionId] = transport;
+              },
+              onsessionclosed: (sessionId) => {
+                console.log(`Session ${sessionId} closed, removing from transports map`);
+                if (transports[sessionId]) {
+                  delete transports[sessionId];
+                }
               }
             });
             
