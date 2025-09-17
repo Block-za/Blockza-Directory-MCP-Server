@@ -8,6 +8,13 @@ A Model Context Protocol (MCP) server that provides access to the Blockza direct
 - **All Companies** (`blockza://companies`) - Complete directory of companies
 - **Company Profile** (`blockza://company/{slug}`) - Detailed company information
 - **Categories** (`blockza://categories`) - Available company categories
+- **All Events** (`blockza://events`) - Complete directory of events
+- **Event Details** (`blockza://event/{id}`) - Detailed event information
+- **Upcoming Events** (`blockza://events/upcoming`) - Upcoming events only
+- **Event Categories** (`blockza://events/categories`) - Available event categories
+- **All Podcasts** (`blockza://podcasts`) - Complete list of podcasts
+- **Podcast Details** (`blockza://podcast/{id}`) - Detailed podcast information
+- **Podcast Categories** (`blockza://podcasts/categories`) - Available podcast categories
 
 ### Tools
 - **search_companies** - Search companies by name, category, or criteria
@@ -15,10 +22,23 @@ A Model Context Protocol (MCP) server that provides access to the Blockza direct
 - **get_companies_by_category** - Retrieve companies in a specific category
 - **get_team_members** - Get team member information for a company
 - **get_directory_stats** - Get overall directory statistics
+- **search_events** - Search events by title, category, or location
+- **get_event_details** - Get detailed information about a specific event
+- **get_events_by_category** - Retrieve events in a specific category
+- **get_upcoming_events** - Get upcoming events
+- **get_events_by_location** - Retrieve events by country/city
+- **get_events_stats** - Get overall events statistics
+- **search_podcasts** - Search podcasts by title, category, or company
+- **get_podcast_details** - Get detailed information about a podcast
+- **get_podcasts_by_category** - Retrieve podcasts in a specific category
+- **get_podcasts_stats** - Get overall podcasts statistics
 
 ### Prompts
 - **analyze_company** - Generate comprehensive company analysis
 - **compare_companies** - Compare companies within the same category
+- **analyze_event** - Generate comprehensive event analysis
+- **compare_events** - Compare events by category or location
+- **event_recommendations** - Generate event recommendations based on criteria
 
 ## Installation
 
@@ -116,14 +136,15 @@ Once configured in Claude Desktop, you can use natural language to interact with
 
 ## API Integration
 
-The server integrates with the Blockza Directory API at `https://api.blockza.io/api/directory`. It supports:
+The server integrates with the Blockza APIs:
 
-- Searching companies by name or description
-- Filtering by category
-- Limiting results
-- Retrieving detailed company profiles
-- Accessing team member information
-- Getting directory statistics
+- Directory: `https://api.blockza.io/api/directory`
+- Events: `https://api.blockza.io/api/events`
+- Podcasts: `https://api.blockza.io/api/podcasts`
+
+- Companies: search/filter by category, details, team, stats
+- Events: search/filter by category/location, upcoming, details, stats
+- Podcasts: search/filter by category/company/status, details, stats
 
 ## Error Handling
 

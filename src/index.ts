@@ -64,6 +64,39 @@ interface ApiResponse {
   data: Company[];
 }
 
+// Podcasts API Types
+interface PodcastImage {
+  public_id: string;
+  url: string;
+  caption: string;
+}
+
+interface PodcastItem {
+  image: PodcastImage;
+  _id: string;
+  title: string;
+  description: string;
+  shortDescription: string;
+  slug: string;
+  category: string;
+  company: string;
+  youtubeIframe: string;
+  status: string;
+  likes: number;
+  views: number;
+  comments: unknown[];
+  createdAt: string;
+  updatedAt: string;
+  __v: number;
+  id: string;
+}
+
+interface PodcastsApiResponse {
+  success: boolean;
+  count: number;
+  data: PodcastItem[];
+}
+
 // Events API Types
 interface EventSocialLinks {
   linkedin: string;
@@ -94,6 +127,7 @@ interface Event {
 class BlockzaAPIClient {
   private baseUrl = "https://api.blockza.io/api/directory";
   private eventsUrl = "https://api.blockza.io/api/events";
+  private podcastsUrl = "https://api.blockza.io/api/podcasts";
 
   async getCompanies(params?: {
     limit?: number;
@@ -212,6 +246,55 @@ class BlockzaAPIClient {
       return await this.getEvents({ country, city });
     } catch (error) {
       console.error('Failed to get events by location:', error);
+      return [];
+    }
+  }
+
+  async getPodcasts(params?: {
+    limit?: number;
+    category?: string;
+    search?: string;
+    company?: string;
+    status?: string; // e.g., published
+  }): Promise<PodcastItem[]> {
+    try {
+      const url = new URL(this.podcastsUrl);
+      if (params?.limit) url.searchParams.set('limit', params.limit.toString());
+      if (params?.category) url.searchParams.set('category', params.category);
+      if (params?.search) url.searchParams.set('search', params.search);
+      if (params?.company) url.searchParams.set('company', params.company);
+      if (params?.status) url.searchParams.set('status', params.status);
+
+      const response = await fetch(url.toString());
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data: PodcastsApiResponse | PodcastItem[] = await response.json();
+      if (Array.isArray(data)) return data;
+      if ((data as PodcastsApiResponse).data) return (data as PodcastsApiResponse).data;
+      return [];
+    } catch (error) {
+      console.error('Podcasts API request failed:', error);
+      throw error;
+    }
+  }
+
+  async getPodcastById(id: string): Promise<PodcastItem | null> {
+    try {
+      const items = await this.getPodcasts();
+      return items.find(p => p._id === id || p.id === id) || null;
+    } catch (error) {
+      console.error('Failed to get podcast by ID:', error);
+      return null;
+    }
+  }
+
+  async getPodcastsByCategory(category: string): Promise<PodcastItem[]> {
+    try {
+      return await this.getPodcasts({ category });
+    } catch (error) {
+      console.error('Failed to get podcasts by category:', error);
       return [];
     }
   }
@@ -492,6 +575,117 @@ server.registerResource(
         contents: [{
           uri: uri.href,
           text: JSON.stringify({ error: `Failed to fetch event categories: ${error}` }, null, 2),
+          mimeType: "application/json"
+        }]
+      };
+    }
+  }
+);
+
+// Podcasts Resources
+server.registerResource(
+  "podcasts",
+  "blockza://podcasts",
+  {
+    title: "All Podcasts",
+    description: "Complete list of podcasts from Blockza",
+    mimeType: "application/json"
+  },
+  async (uri) => {
+    try {
+      const podcasts = await apiClient.getPodcasts();
+      return {
+        contents: [{
+          uri: uri.href,
+          text: JSON.stringify(podcasts, null, 2),
+          mimeType: "application/json"
+        }]
+      };
+    } catch (error) {
+      return {
+        contents: [{
+          uri: uri.href,
+          text: JSON.stringify({ error: `Failed to fetch podcasts: ${error}` }, null, 2),
+          mimeType: "application/json"
+        }]
+      };
+    }
+  }
+);
+
+server.registerResource(
+  "podcast-details",
+  new ResourceTemplate("blockza://podcast/{id}", { list: undefined }),
+  {
+    title: "Podcast Details",
+    description: "Detailed information for a specific podcast"
+  },
+  async (uri, { id }) => {
+    try {
+      if (typeof id !== 'string') {
+        return {
+          contents: [{
+            uri: uri.href,
+            text: JSON.stringify({ error: "Invalid podcast ID parameter" }, null, 2),
+            mimeType: "application/json"
+          }]
+        };
+      }
+
+      const podcast = await apiClient.getPodcastById(id);
+      if (!podcast) {
+        return {
+          contents: [{
+            uri: uri.href,
+            text: JSON.stringify({ error: `Podcast not found: ${id}` }, null, 2),
+            mimeType: "application/json"
+          }]
+        };
+      }
+      return {
+        contents: [{
+          uri: uri.href,
+          text: JSON.stringify(podcast, null, 2),
+          mimeType: "application/json"
+        }]
+      };
+    } catch (error) {
+      return {
+        contents: [{
+          uri: uri.href,
+          text: JSON.stringify({ error: `Failed to fetch podcast: ${error}` }, null, 2),
+          mimeType: "application/json"
+        }]
+      };
+    }
+  }
+);
+
+server.registerResource(
+  "podcast-categories",
+  "blockza://podcasts/categories",
+  {
+    title: "Podcast Categories",
+    description: "Available categories for filtering podcasts",
+    mimeType: "application/json"
+  },
+  async (uri) => {
+    try {
+      const podcasts = await apiClient.getPodcasts();
+      const categories = new Set<string>();
+      podcasts.forEach(p => { if (p.category) categories.add(p.category); });
+      return {
+        contents: [{
+          uri: uri.href,
+          text: JSON.stringify({ success: true, categories: Array.from(categories).sort() }, null, 2),
+          mimeType: "application/json"
+        }]
+      };
+    } catch (error) {
+      return {
+        contents: [{
+          uri: uri.href,
+          text: JSON.stringify({ error: `Failed to fetch podcast categories: ${error}` }, null, 2),
           mimeType: "application/json"
         }]
       };
@@ -1155,6 +1349,158 @@ server.registerTool(
           type: "text",
           text: `Error getting events statistics: ${error}`
         }],
+        isError: true
+      };
+    }
+  }
+);
+
+// Podcasts Tools
+server.registerTool(
+  "search_podcasts",
+  {
+    title: "Search Podcasts",
+    description: "Search podcasts by title, category, or company",
+    inputSchema: {
+      search: z.string().optional().describe("Search term for title/description/company"),
+      category: z.string().optional().describe("Filter by podcast category"),
+      company: z.string().optional().describe("Filter by company/organization"),
+      limit: z.number().optional().describe("Maximum number of results to return"),
+      status: z.string().optional().describe("Filter by status, e.g., 'published'")
+    }
+  },
+  async ({ search, category, company, limit, status }) => {
+    try {
+      const params: { search?: string; category?: string; company?: string; limit?: number; status?: string } = {};
+      if (search !== undefined) params.search = search;
+      if (category !== undefined) params.category = category;
+      if (company !== undefined) params.company = company;
+      if (limit !== undefined) params.limit = limit;
+      if (status !== undefined) params.status = status;
+
+      const podcasts = await apiClient.getPodcasts(params);
+      const results = limit ? podcasts.slice(0, limit) : podcasts;
+
+      const summary = results.map(p => ({
+        id: p._id || p.id,
+        title: p.title,
+        company: p.company,
+        category: p.category,
+        image: p.image?.url,
+        youtube: p.youtubeIframe,
+        likes: p.likes,
+        views: p.views,
+        slug: p.slug,
+        createdAt: p.createdAt
+      }));
+
+      return {
+        content: [{
+          type: "text",
+          text: `PODCASTS_DATA_START\n${JSON.stringify(summary, null, 2)}\nPODCASTS_DATA_END\n\nFound ${summary.length} podcasts.`
+        }]
+      };
+    } catch (error) {
+      return {
+        content: [{ type: "text", text: `Error searching podcasts: ${error}` }],
+        isError: true
+      };
+    }
+  }
+);
+
+server.registerTool(
+  "get_podcast_details",
+  {
+    title: "Get Podcast Details",
+    description: "Get detailed information about a specific podcast by ID",
+    inputSchema: {
+      podcast_id: z.string().describe("Podcast ID to look up")
+    }
+  },
+  async ({ podcast_id }) => {
+    try {
+      const p = await apiClient.getPodcastById(podcast_id);
+      if (!p) {
+        return {
+          content: [{ type: "text", text: `Podcast not found: ${podcast_id}` }],
+          isError: true
+        };
+      }
+      return {
+        content: [{ type: "text", text: JSON.stringify(p, null, 2) }]
+      };
+    } catch (error) {
+      return {
+        content: [{ type: "text", text: `Error getting podcast details: ${error}` }],
+        isError: true
+      };
+    }
+  }
+);
+
+server.registerTool(
+  "get_podcasts_by_category",
+  {
+    title: "Get Podcasts by Category",
+    description: "Retrieve all podcasts in a specific category",
+    inputSchema: {
+      category: z.string().describe("Category to filter by"),
+      limit: z.number().optional().describe("Maximum number of results to return")
+    }
+  },
+  async ({ category, limit }) => {
+    try {
+      const podcasts = await apiClient.getPodcastsByCategory(category);
+      const results = limit ? podcasts.slice(0, limit) : podcasts;
+      const summary = results.map(p => ({ id: p._id || p.id, title: p.title, company: p.company, image: p.image?.url }));
+      return {
+        content: [{ type: "text", text: `PODCASTS_DATA_START\n${JSON.stringify(summary, null, 2)}\nPODCASTS_DATA_END\n\nFound ${summary.length} podcasts in category "${category}".` }]
+      };
+    } catch (error) {
+      return {
+        content: [{ type: "text", text: `Error getting podcasts by category: ${error}` }],
+        isError: true
+      };
+    }
+  }
+);
+
+server.registerTool(
+  "get_podcasts_stats",
+  {
+    title: "Get Podcasts Statistics",
+    description: "Get overall statistics for podcasts",
+    inputSchema: {}
+  },
+  async () => {
+    try {
+      const podcasts = await apiClient.getPodcasts();
+      const categories = new Set<string>();
+      const companies = new Set<string>();
+      let totalLikes = 0;
+      let totalViews = 0;
+      podcasts.forEach(p => {
+        if (p.category) categories.add(p.category);
+        if (p.company) companies.add(p.company);
+        totalLikes += p.likes || 0;
+        totalViews += p.views || 0;
+      });
+      const stats = {
+        total_podcasts: podcasts.length,
+        total_categories: categories.size,
+        categories: Array.from(categories).sort(),
+        total_companies: companies.size,
+        companies: Array.from(companies).sort(),
+        total_likes: totalLikes,
+        total_views: totalViews,
+        average_likes: podcasts.length ? +(totalLikes / podcasts.length).toFixed(2) : 0,
+        average_views: podcasts.length ? +(totalViews / podcasts.length).toFixed(2) : 0
+      };
+      return { content: [{ type: "text", text: JSON.stringify(stats, null, 2) }] };
+    } catch (error) {
+      return {
+        content: [{ type: "text", text: `Error getting podcasts statistics: ${error}` }],
         isError: true
       };
     }
